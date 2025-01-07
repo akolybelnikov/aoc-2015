@@ -14,6 +14,7 @@ func main() {
 		os.Exit(0)
 	}
 	input := string(data)
+	input = strings.TrimSpace(input)
 
 	fmt.Println("--- Part One ---")
 	fmt.Println("Result:", part1(input))
@@ -26,13 +27,11 @@ func main() {
 
 // part one
 func part1(input string) int {
-	input = strings.TrimSpace(input)
 	return findHash(input, "00000")
 }
 
 // part two
 func part2(input string) int {
-	input = strings.TrimSpace(input)
 	return findHash(input, "000000")
 }
 
