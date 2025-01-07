@@ -46,3 +46,6 @@ Thumbs.db
 /go.sum
 /go.work
 /go.work.sum
+
+# Individual inputs
+/inputs
