@@ -15,8 +15,10 @@ type node struct {
 	adj  []node
 }
 
+const inputFilePath = "inputs/day09.txt"
+
 func main() {
-	data, err := os.ReadFile("inputs/day09.txt")
+	data, err := os.ReadFile(inputFilePath)
 	if err != nil {
 		fmt.Println("Failed to read input file.", err)
 		os.Exit(0)
@@ -32,97 +34,93 @@ func main() {
 	os.Exit(0)
 }
 
-// part one
-func part1(input string) int {
+// Extracted function to process input and return parsed graph and nodes
+func processInput(input string) (map[int]string, graph, error) {
 	lines, err := utils.ParseLines(input)
-	utils.HandleErr(err)
-
-	nodes, g, err := newGraph(lines)
-	utils.HandleErr(err)
-
-	minCost, shortestPath, _, _ := tsp(g)
-	cities := make([]string, len(shortestPath))
-	for _, idx := range shortestPath {
-		cities[idx] = nodes[idx]
+	if err != nil {
+		return nil, nil, err
 	}
-	fmt.Println(strings.Join(cities, " -> "))
+	return newGraph(lines)
+}
 
+func part1(input string) int {
+	nodes, graph, err := processInput(input)
+	utils.HandleErr(err)
+
+	minCost, shortestPath, _, _ := tsp(graph)
+	printPath(nodes, shortestPath)
 	return minCost
 }
 
-// part two
 func part2(input string) int {
-	lines, err := utils.ParseLines(input)
+	nodes, graph, err := processInput(input)
 	utils.HandleErr(err)
 
-	nodes, g, err := newGraph(lines)
-	utils.HandleErr(err)
-
-	_, _, maxCost, longestPath := tsp(g)
-	cities := make([]string, len(longestPath))
-	for _, idx := range longestPath {
-		cities[idx] = nodes[idx]
-	}
-	fmt.Println(strings.Join(cities, " -> "))
-
+	_, _, maxCost, longestPath := tsp(graph)
+	printPath(nodes, longestPath)
 	return maxCost
 }
 
 func newGraph(lines []string) (map[int]string, graph, error) {
-	nodes := make(map[string]int)
-	adj := make([][3]int, 0)
-	cur := 0
+	nodeIndices := make(map[string]int)
+	edges := [][3]int{}
+	currentIndex := 0
+
 	for _, line := range lines {
 		fields := strings.Fields(line)
-		var idx1, idx2 int
-		if a, ok := nodes[fields[0]]; !ok {
-			idx1 = cur
-			cur++
+		var fromIndex, toIndex int
+
+		// Assign indices for nodes if not already mapped
+		if idx, exists := nodeIndices[fields[0]]; !exists {
+			fromIndex = currentIndex
+			currentIndex++
 		} else {
-			idx1 = a
+			fromIndex = idx
 		}
-		if b, ok := nodes[fields[2]]; !ok {
-			idx2 = cur
-			cur++
+
+		if idx, exists := nodeIndices[fields[2]]; !exists {
+			toIndex = currentIndex
+			currentIndex++
 		} else {
-			idx2 = b
+			toIndex = idx
 		}
+
 		dist, err := strconv.Atoi(fields[4])
 		if err != nil {
 			return nil, nil, err
 		}
-		adj = append(adj, [3]int{idx1, idx2, dist})
-		nodes[fields[0]] = idx1
-		nodes[fields[2]] = idx2
+
+		edges = append(edges, [3]int{fromIndex, toIndex, dist})
+		nodeIndices[fields[0]] = fromIndex
+		nodeIndices[fields[2]] = toIndex
 	}
 
-	g := make(graph, len(nodes))
-	for _, a := range adj {
-		idx1, idx2, dist := a[0], a[1], a[2]
-		if g[idx1] == nil {
-			g[idx1] = make([]int, len(nodes))
+	// Build adjacency graph
+	adjGraph := make(graph, len(nodeIndices))
+	for _, edge := range edges {
+		fromIndex, toIndex, dist := edge[0], edge[1], edge[2]
+		if adjGraph[fromIndex] == nil {
+			adjGraph[fromIndex] = make([]int, len(nodeIndices))
 		}
-		g[idx1][idx2] = dist
-		if g[idx2] == nil {
-			g[idx2] = make([]int, len(nodes))
+		adjGraph[fromIndex][toIndex] = dist
+
+		if adjGraph[toIndex] == nil {
+			adjGraph[toIndex] = make([]int, len(nodeIndices))
 		}
-		g[idx2][idx1] = dist
+		adjGraph[toIndex][fromIndex] = dist
 	}
 
-	return invertMap(nodes), g, nil
-}
-
-func invertMap(m map[string]int) map[int]string {
-	res := make(map[int]string)
-	for k, v := range m {
-		res[v] = k
+	// Invert the nodeIndices map to create node names map
+	nodeNames := make(map[int]string)
+	for name, idx := range nodeIndices {
+		nodeNames[idx] = name
 	}
-	return res
+	return nodeNames, adjGraph, nil
 }
 
 func tsp(g [][]int) (int, []int, int, []int) {
 	n := len(g)
-	const Inf = int(1e9) // A large value to represent infinity
+	const Inf = int(1e9)
 
 	// DP tables for shortest and longest paths
 	minDp := make([][]int, 1<<n)
@@ -136,95 +134,85 @@ func tsp(g [][]int) (int, []int, int, []int) {
 		parent[i] = make([]int, n)
 		parentMax[i] = make([]int, n)
 		for j := 0; j < n; j++ {
-			minDp[i][j] = Inf  // Initialize shortest path DP table with infinity
-			maxDp[i][j] = -Inf // Initialize longest path DP table with negative infinity
-			parent[i][j] = -1  // Initialize parent arrays with -1 (undefined)
+			minDp[i][j] = Inf
+			maxDp[i][j] = -Inf
+			parent[i][j] = -1
 			parentMax[i][j] = -1
 		}
 	}
 
 	// Initialize DP for each starting node
 	for i := 0; i < n; i++ {
-		minDp[1<<i][i] = 0 // Starting cost is 0 for shortest path
-		maxDp[1<<i][i] = 0 // Starting cost is 0 for longest path
+		minDp[1<<i][i] = 0
+		maxDp[1<<i][i] = 0
 	}
 
 	// Main DP loop
-	for mask := 1; mask < (1 << n); mask++ { // Iterate over all subsets of nodes
-		for u := 0; u < n; u++ { // Current ending node
-			if mask&(1<<u) == 0 { // Skip if u is not in the current subset
+	for mask := 1; mask < (1 << n); mask++ {
+		for u := 0; u < n; u++ {
+			if mask&(1<<u) == 0 {
 				continue
 			}
-			for v := 0; v < n; v++ { // Try to transition to another node
-				if mask&(1<<v) != 0 || g[u][v] == 0 { // Skip if v is already visited or no edge
+			for v := 0; v < n; v++ {
+				if mask&(1<<v) != 0 || g[u][v] == 0 {
 					continue
 				}
-
 				nextMask := mask | (1 << v)
-
 				// Shortest Path DP Update
 				newCost := minDp[mask][u] + g[u][v]
 				if newCost < minDp[nextMask][v] {
 					minDp[nextMask][v] = newCost
-					parent[nextMask][v] = u // Record the parent node for shortest path reconstruction
+					parent[nextMask][v] = u
 				}
-
 				// Longest Path DP Update
 				newCost = maxDp[mask][u] + g[u][v]
 				if newCost > maxDp[nextMask][v] {
 					maxDp[nextMask][v] = newCost
-					parentMax[nextMask][v] = u // Record the parent node for longest path reconstruction
+					parentMax[nextMask][v] = u
 				}
 			}
 		}
 	}
 
-	// Identify the final nodes and costs
-	endMask := (1 << n) - 1 // All nodes visited
+	// Identify final solutions
+	allVisited := (1 << n) - 1
 	minCost, maxCost := Inf, -Inf
-	lastNodeForMin, lastNodeForMax := -1, -1
+	lastMin, lastMax := -1, -1
 
-	for u := 0; u < n; u++ {
-		// Find the minimum cost path end node
-		if minDp[endMask][u] < minCost {
-			minCost = minDp[endMask][u]
-			lastNodeForMin = u
+	for i := 0; i < n; i++ {
+		if minDp[allVisited][i] < minCost {
+			minCost = minDp[allVisited][i]
+			lastMin = i
 		}
-		// Find the maximum cost path end node
-		if maxDp[endMask][u] > maxCost {
-			maxCost = maxDp[endMask][u]
-			lastNodeForMax = u
+		if maxDp[allVisited][i] > maxCost {
+			maxCost = maxDp[allVisited][i]
+			lastMax = i
 		}
 	}
 
-	// Ensure valid paths exist for both shortest and longest paths
-	if lastNodeForMin == -1 || lastNodeForMax == -1 {
-		panic("Unable to reconstruct paths: check graph connectivity.")
-	}
-
-	// Reconstruct the shortest path directly
-	curNode := lastNodeForMin
-	curMask := endMask
-	shortestPath := []int{}
-
-	for curNode != -1 {
-		shortestPath = append([]int{curNode}, shortestPath...) // Add current node to the front of the path
-		nextNode := parent[curMask][curNode]
-		curMask ^= 1 << curNode // Remove current node from the mask
-		curNode = nextNode      // Move to the parent node
-	}
-
-	// Reconstruct the longest path directly
-	curNode = lastNodeForMax
-	curMask = endMask
-	longestPath := []int{}
-
-	for curNode != -1 {
-		longestPath = append([]int{curNode}, longestPath...) // Add current node to the front of the path
-		nextNode := parentMax[curMask][curNode]
-		curMask ^= 1 << curNode // Remove current node from the mask
-		curNode = nextNode      // Move to the parent node
-	}
+	shortestPath := reconstructPath(allVisited, lastMin, parent)
+	longestPath := reconstructPath(allVisited, lastMax, parentMax)
 
 	return minCost, shortestPath, maxCost, longestPath
+}
+
+// Helper function to reconstruct path
+func reconstructPath(finalMask, lastNode int, parent [][]int) []int {
+	var path []int
+	for current := lastNode; current != -1; {
+		path = append([]int{current}, path...)
+		next := parent[finalMask][current]
+		finalMask ^= 1 << current
+		current = next
+	}
+	return path
+}
+
+// Helper function to print the path
+func printPath(nodes map[int]string, path []int) {
+	cities := make([]string, len(path))
+	for i, idx := range path {
+		cities[i] = nodes[idx]
+	}
+	fmt.Println(strings.Join(cities, " -> "))
 }
