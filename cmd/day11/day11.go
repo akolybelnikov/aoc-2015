@@ -48,8 +48,8 @@ func part2(input string) string {
 func increment(s string) string {
 	bs := []byte(s)
 	idx := len(bs) - 1
-	carry := false
-	for !carry {
+	carry := true
+	for carry {
 		bs[idx]++
 		if bs[idx] > 'z' {
 			bs[idx] = 'a'
@@ -58,7 +58,7 @@ func increment(s string) string {
 				break
 			}
 		} else {
-			carry = true
+			carry = false
 		}
 	}
 
@@ -66,10 +66,10 @@ func increment(s string) string {
 }
 
 func isValid(s string) bool {
-	if hasTwoDistinctPairs(s) {
+	if !strings.ContainsAny(s, "iol") && hasTwoDistinctPairs(s) {
 		for i := 0; i <= len(s)-3; i++ {
 			substring := s[i : i+3] // Extract 3 consecutive letters
-			if !strings.ContainsAny(s, "iol") && isSequential(substring) {
+			if isSequential(substring) {
 				return true
 			}
 		}
